@@ -42,11 +42,12 @@
   }
 
   // ── Storage helpers ───────────────────────────────────────
-  const getState  = ()  => new Promise(r => chrome.runtime.sendMessage({type:'GET_STATE'},        x => r(x || {})));
-  const setState  = d   => new Promise(r => chrome.runtime.sendMessage({type:'SET_STATE',data:d}, r));
-  const saveRow   = p   => new Promise(r => chrome.runtime.sendMessage({type:'SAVE_ROW',payload:p}, x => r(chrome.runtime.lastError ? {ok:false} : (x||{ok:false}))));
-  const markSaved = u   => new Promise(r => chrome.runtime.sendMessage({type:'MARK_SAVED',url:u}, r));
-  const getSaved  = ()  => new Promise(r => chrome.runtime.sendMessage({type:'GET_SAVED_URLS'},   x => r(x?.urls||[])));
+  const getState      = ()  => new Promise(r => chrome.runtime.sendMessage({type:'GET_STATE'},        x => r(x || {})));
+  const setState      = d   => new Promise(r => chrome.runtime.sendMessage({type:'SET_STATE',data:d}, r));
+  const saveRow       = p   => new Promise(r => chrome.runtime.sendMessage({type:'SAVE_ROW',payload:p}, x => r(chrome.runtime.lastError ? {ok:false} : (x||{ok:false}))));
+  const markSaved     = u   => new Promise(r => chrome.runtime.sendMessage({type:'MARK_SAVED',url:u}, r));
+  const getSaved      = ()  => new Promise(r => chrome.runtime.sendMessage({type:'GET_SAVED_URLS'},   x => r(x?.urls||[])));
+  const getSheetUrls  = ()  => new Promise(r => chrome.runtime.sendMessage({type:'GET_SHEET_URLS'},   x => r(x?.urls||[])));
 
   // ── Row / checkbox detection ──────────────────────────────
   function isRowChecked(row) {
@@ -292,20 +293,40 @@
       return;
     }
 
-    // Persist entire queue to storage BEFORE any navigation
+    // ── Cross-match against Google Sheet BEFORE queuing ──
+    toast('🔍 Checking Google Sheet for duplicates...', 'info', 4000);
+    log('Fetching existing Apollo URLs from Google Sheet...');
+    const sheetUrls  = await getSheetUrls();
+    const sheetUrlSet = new Set(sheetUrls);
+    log(`Sheet has ${sheetUrlSet.size} existing URLs.`);
+
+    const fresh    = contacts.filter(c => !sheetUrlSet.has(c.apolloUrl));
+    const dupeCount = contacts.length - fresh.length;
+
+    if (dupeCount > 0) {
+      log(`Skipping ${dupeCount} already-in-sheet contact(s).`);
+      toast(`⏭ ${dupeCount} already in Sheet — skipped upfront.`, 'info', 3000);
+    }
+
+    if (fresh.length === 0) {
+      toast('✅ All selected contacts are already in the Sheet. Nothing to do!', 'success', 8000);
+      return;
+    }
+
+    // Persist only the fresh contacts as the queue
     await setState({
       agentState:   'running',
       agentSpeed:   SPEED,
-      agentQueue:   contacts,
+      agentQueue:   fresh,
       agentIndex:   0,
       agentSaved:   0,
       agentSkipped: 0,
-      agentTotal:   contacts.length,
+      agentTotal:   fresh.length,
       agentPaused:  false,
     });
 
-    log(`✅ Queue of ${contacts.length} contacts saved to storage.`);
-    toast(`📋 ${contacts.length} contacts queued. Starting first...`, 'info', 2500);
+    log(`✅ Queue of ${fresh.length} contacts saved to storage.`);
+    toast(`📋 ${fresh.length} contacts queued. Starting first...`, 'info', 2500);
 
     await sleep(1500);
     await processNextContact();

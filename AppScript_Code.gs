@@ -10,7 +10,7 @@
 //  5. Copy /exec URL → paste in extension popup → Save → Test
 // ═══════════════════════════════════════════════════════════════
 
-const SHEET_ID   = 'YOUR_GOOGLE_SHEET_ID_HERE'; // 🔴 Replace with your Sheet ID
+const SHEET_ID   = 'Your Google Sheet ID Here'; // 🔴 Replace with your Sheet ID
 const SHEET_NAME = 'Apollo Leads';
 const COLS = ['Timestamp','Person Name','Person LinkedIn','Company Name','Company LinkedIn','Company Website','Apollo URL'];
 
@@ -20,6 +20,15 @@ function doGet(e) {
 
     // Health check
     if (!p || !p.n) {
+      // If action=getUrls, return all Apollo URLs already in the sheet
+      if (p && p.action === 'getUrls') {
+        const sheet = getSheet();
+        const urls  = sheet.getLastRow() < 2
+          ? []
+          : sheet.getRange(2, 7, sheet.getLastRow() - 1, 1).getValues()
+              .map(r => r[0]).filter(Boolean);
+        return respond({ status: 'ok', urls });
+      }
       return respond({ status: 'ok', message: 'Apollo Lead Agent v4.0 ✅' });
     }
 

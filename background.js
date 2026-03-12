@@ -33,6 +33,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'GET_SHEET_URLS') {
+    chrome.storage.sync.get(['webAppUrl'], async ({ webAppUrl }) => {
+      if (!webAppUrl) { sendResponse({ ok: false, urls: [] }); return; }
+      try {
+        const res  = await fetch(webAppUrl + '?action=getUrls');
+        const data = await res.json();
+        log('Fetched sheet URLs:', data.urls?.length || 0);
+        sendResponse({ ok: true, urls: data.urls || [] });
+      } catch (e) {
+        log('GET_SHEET_URLS error:', e.message);
+        sendResponse({ ok: false, urls: [] });
+      }
+    });
+    return true;
+  }
+
   if (msg.type === 'GET_SAVED_URLS') {
     chrome.storage.local.get(['savedUrls'], ({ savedUrls }) => {
       sendResponse({ urls: savedUrls || [] });
